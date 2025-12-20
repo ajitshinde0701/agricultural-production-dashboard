@@ -6,7 +6,6 @@ import warnings
 
 # ---------------- CONFIG ----------------
 warnings.filterwarnings("ignore")
-rcParams["font.family"] = "Noto Sans Devanagari"
 rcParams["axes.unicode_minus"] = False
 
 st.set_page_config(page_title="Agricultural Production Dashboard", layout="wide")
@@ -14,22 +13,11 @@ st.set_page_config(page_title="Agricultural Production Dashboard", layout="wide"
 # ---------------- LOAD DATA ----------------
 df = pd.read_csv("cleaned_crop_production.csv")
 
-# ---------------- CROP NAME MAP ----------------
-crop_map = {
-    "Rice": "भात", "Wheat": "गहू", "Maize": "मका",
-    "Sugarcane": "ऊस", "Cotton": "कापूस",
-    "Jowar": "ज्वारी", "Bajra": "बाजरी",
-    "Pulses": "डाळी", "Groundnut": "भुईमूग",
-    "Soybean": "सोयाबीन"
-}
-df["crop_mr"] = df["crop"].map(crop_map).fillna(df["crop"])
-
 # ---------------- TITLE ----------------
 st.markdown(
     """
     <h1 style="text-align:center; color:#2E8B57;">
-    🌾 Agricultural Production Analysis Dashboard<br>
-    <span style="font-size:18px;">कृषी उत्पादन विश्लेषण डॅशबोर्ड</span>
+    🌾 Agricultural Production Analysis Dashboard
     </h1>
     """,
     unsafe_allow_html=True
@@ -166,9 +154,9 @@ else:
 
 st.success(
     f"""
-    • **{district} district contributes {prod_share:.2f}% of the total agricultural production of {state}.**  
+    • **{district} contributes {prod_share:.2f}% of total agricultural production of {state}.**  
     • **Average yield of {district} is {yield_compare} the state average yield.**  
-    • This shows the relative importance and productivity of the district within the state.
+    • This indicates the relative importance and productivity of the district within the state.
     """
 )
 
@@ -178,7 +166,7 @@ st.success(
 st.subheader("🌾 Crop-wise Production Distribution")
 
 crop_prod = (
-    filtered_df.groupby("crop_mr")["production"]
+    filtered_df.groupby("crop")["production"]
     .sum()
     .sort_values(ascending=False)
 )
@@ -212,5 +200,5 @@ st.dataframe(filtered_df)
 # ---------------- FOOTER ----------------
 st.caption(
     "This dashboard compares overall, state-level, and district-level agricultural performance "
-    "using both visual and textual analysis. All analysis is descriptive."
+    "using visual and textual analysis. All analysis is descriptive."
 )
