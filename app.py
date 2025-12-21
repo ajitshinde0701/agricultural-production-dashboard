@@ -1,13 +1,10 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
-from matplotlib import rcParams
 import warnings
 
 # ---------------- CONFIG ----------------
 warnings.filterwarnings("ignore")
-rcParams["axes.unicode_minus"] = False
-
 st.set_page_config(page_title="Agricultural Production Dashboard", layout="wide")
 
 # ---------------- LOAD DATA ----------------
@@ -59,117 +56,147 @@ state_year_df = state_df[
 # ==================================================
 st.subheader("📊 Overview")
 
-# ---- Row 1: Overall ----
-overall_prod = df["production"].sum()
-overall_area = df["area"].sum()
-overall_yield = overall_prod / overall_area
+# ---- All States Totals ----
+all_state_prod = df["production"].sum()
+all_state_area = df["area"].sum()
+all_state_yield = all_state_prod / all_state_area
 
-st.markdown("### 🌍 Overall Agricultural Performance")
+st.markdown("### 🌍 Overall Agricultural Performance (All States)")
 o1, o2, o3 = st.columns(3)
-o1.metric("Total Production", f"{overall_prod:,.0f}")
-o2.metric("Total Area", f"{overall_area:,.0f}")
-o3.metric("Average Yield", f"{overall_yield:.2f}")
+o1.metric("Total Production", f"{all_state_prod:,.0f}")
+o2.metric("Total Area", f"{all_state_area:,.0f}")
+o3.metric("Average Yield", f"{all_state_yield:.2f}")
 
-# ---- Row 2: Selected Region ----
+# ---- Selected Region ----
 region_prod = filtered_df["production"].sum()
 region_area = filtered_df["area"].sum()
 region_yield = region_prod / region_area if region_area > 0 else 0
 
+prod_percent = (region_prod / all_state_prod) * 100 if all_state_prod > 0 else 0
+area_percent = (region_area / all_state_area) * 100 if all_state_area > 0 else 0
+
+if region_yield > all_state_yield:
+    yield_status = "higher than"
+elif region_yield < all_state_yield:
+    yield_status = "lower than"
+else:
+    yield_status = "equal to"
+
 st.markdown(f"### 📍 Selected Region ({state} - {district})")
 r1, r2, r3 = st.columns(3)
-r1.metric("Production", f"{region_prod:,.0f}")
-r2.metric("Area", f"{region_area:,.0f}")
-r3.metric("Yield", f"{region_yield:.2f}")
+
+r1.metric("Production", f"{region_prod:,.0f}", f"{prod_percent:.3f}% of all states")
+r2.metric("Area", f"{region_area:,.0f}", f"{area_percent:.3f}% of all states")
+r3.metric("Yield", f"{region_yield:.2f}", f"{yield_status} national avg")
+
+st.info(
+    f"""
+    **Interpretation:**  
+    - {district} contributes **{prod_percent:.3f}%** of total agricultural production across all states.  
+    - The district uses **{area_percent:.3f}%** of total cultivated area.  
+    - Its average yield is **{yield_status}** the overall national average yield.
+    """
+)
 
 # ==================================================
 # STATE-WISE TOTAL PRODUCTION COMPARISON
 # ==================================================
 st.subheader("🏛 State-wise Total Production Comparison")
 
-state_prod = (
-    df.groupby("state")["production"]
-    .sum()
-    .sort_values(ascending=False)
-)
+state_prod = df.groupby("state")["production"].sum().sort_values(ascending=False)
 
-fig_state, ax_state = plt.subplots(figsize=(9, 5))
+fig_state, ax_state = plt.subplots(figsize=(10, 5))
 colors = ["#2E8B57" if s == state else "#B0C4DE" for s in state_prod.index]
 
-ax_state.bar(state_prod.index, state_prod.values, color=colors)
+bars = ax_state.bar(state_prod.index, state_prod.values, color=colors)
+
 ax_state.set_ylabel("Total Production")
 ax_state.set_xlabel("State")
+ax_state.set_title("State-wise Total Production Comparison")
 ax_state.set_xticklabels(state_prod.index, rotation=90)
 
-st.pyplot(fig_state)
-st.caption("Selected state is highlighted for comparison.")
+# ---- ADD VALUE LABELS ----
+for bar in bars:
+    height = bar.get_height()
+    if height > 0:
+        ax_state.text(
+            bar.get_x() + bar.get_width() / 2,
+            height,
+            f"{height/1e9:.1f}B",   # show in billions
+            ha="center",
+            va="bottom",
+            fontsize=8,
+            rotation=90
+        )
 
-# ==================================================
-# STATE vs DISTRICT COMPARISON (BAR + TEXT)
-# ==================================================
+st.pyplot(fig_state)
+
+
+
+
+# STATE vs DISTRICT COMPARISON
+
 st.subheader(f"📍 {state}: State vs District Comparison")
 
-# ---- Production ----
 state_total_prod = state_year_df["production"].sum()
-district_total_prod = filtered_df["production"].sum()
-
-# ---- Yield ----
-state_yield = state_year_df["production"].sum() / state_year_df["area"].sum()
-district_yield = region_yield
+state_total_yield = state_year_df["production"].sum() / state_year_df["area"].sum()
 
 colA, colB = st.columns(2)
 
 with colA:
-    st.markdown("#### 🌾 Total Production")
     fig_p, ax_p = plt.subplots()
-    ax_p.bar(
+    bars_p = ax_p.bar(
         ["State", "District"],
-        [state_total_prod, district_total_prod],
-        color=["#2E8B57", "#FFA07A"]
+        [state_total_prod, region_prod],
+        color=["#B0C4DE", "#2E8B57"]
     )
-    ax_p.set_ylabel("Production")
+    ax_p.set_ylabel("Total Production")
+    ax_p.set_title("Production Comparison")
+
+    # Add value labels
+    for bar in bars_p:
+        height = bar.get_height()
+        ax_p.text(
+            bar.get_x() + bar.get_width() / 2,
+            height,
+            f"{height:,.0f}",
+            ha="center",
+            va="bottom",
+            fontsize=9
+        )
+
     st.pyplot(fig_p)
 
 with colB:
-    st.markdown("#### 🌱 Average Yield")
     fig_y, ax_y = plt.subplots()
-    ax_y.bar(
+    bars_y = ax_y.bar(
         ["State", "District"],
-        [state_yield, district_yield],
-        color=["#2E8B57", "#FFA07A"]
+        [state_total_yield, region_yield],
+        color=["#B0C4DE", "#2E8B57"]
     )
-    ax_y.set_ylabel("Yield")
+    ax_y.set_ylabel("Average Yield")
+    ax_y.set_title("Yield Comparison")
+
+    # Add value labels
+    for bar in bars_y:
+        height = bar.get_height()
+        ax_y.text(
+            bar.get_x() + bar.get_width() / 2,
+            height,
+            f"{height:.2f}",
+            ha="center",
+            va="bottom",
+            fontsize=9
+        )
+
     st.pyplot(fig_y)
 
-# ---------------- TEXTUAL INTERPRETATION ----------------
-st.markdown("### 📝 Interpretation (State vs District)")
 
-prod_share = (district_total_prod / state_total_prod) * 100 if state_total_prod > 0 else 0
-
-if district_yield > state_yield:
-    yield_compare = "higher than"
-elif district_yield < state_yield:
-    yield_compare = "lower than"
-else:
-    yield_compare = "equal to"
-
-st.success(
-    f"""
-    • **{district} contributes {prod_share:.2f}% of total agricultural production of {state}.**  
-    • **Average yield of {district} is {yield_compare} the state average yield.**  
-    • This indicates the relative importance and productivity of the district within the state.
-    """
-)
-
-# ==================================================
 # CROP-WISE PRODUCTION
-# ==================================================
+
 st.subheader("🌾 Crop-wise Production Distribution")
 
-crop_prod = (
-    filtered_df.groupby("crop")["production"]
-    .sum()
-    .sort_values(ascending=False)
-)
+crop_prod = filtered_df.groupby("crop")["production"].sum().sort_values(ascending=False)
 
 fig_crop, ax_crop = plt.subplots(figsize=(8, 5))
 ax_crop.barh(crop_prod.index, crop_prod.values)
@@ -180,25 +207,10 @@ for i, v in enumerate(crop_prod.values):
 
 st.pyplot(fig_crop)
 
-# ---- Interpretation ----
-if not crop_prod.empty:
-    share = (crop_prod.iloc[0] / crop_prod.sum()) * 100
-    if share > 70:
-        st.warning(
-            f"🔎 Interpretation: Production is dominated by **{crop_prod.index[0]}** "
-            f"({share:.1f}% contribution)."
-        )
-    else:
-        st.info("🔎 Interpretation: Production is distributed among multiple crops.")
 
-# ==================================================
 # DATA TABLE
-# ==================================================
+
 st.subheader("📋 Data")
 st.dataframe(filtered_df)
 
-# ---------------- FOOTER ----------------
-st.caption(
-    "This dashboard compares overall, state-level, and district-level agricultural performance "
-    "using visual and textual analysis. All analysis is descriptive."
-)
+
