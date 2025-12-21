@@ -51,9 +51,9 @@ state_year_df = state_df[
     (state_df["year"] <= year_range[1])
 ]
 
-# ==================================================
-# OVERVIEW (2 ROWS)
-# ==================================================
+
+# OVERVIEW SECTION
+
 st.subheader("📊 Overview")
 
 # ---- All States Totals ----
@@ -98,9 +98,9 @@ st.info(
     """
 )
 
-# ==================================================
+
 # STATE-WISE TOTAL PRODUCTION COMPARISON
-# ==================================================
+
 st.subheader("🏛 State-wise Total Production Comparison")
 
 state_prod = df.groupby("state")["production"].sum().sort_values(ascending=False)
