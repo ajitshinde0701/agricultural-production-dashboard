@@ -1,7 +1,7 @@
-
 # =========================================================
-# AGRICULTURAL PRODUCTION ANALYSIS DASHBOARD
-# LIGHTWEIGHT + PROFESSIONAL VERSION
+# LIGHTWEIGHT AGRICULTURE DASHBOARD
+# STREAMLIT CLOUD FRIENDLY
+# FIXED VERSION (MISSING STATES + STREAMLIT WARNINGS FIXED)
 # =========================================================
 
 import streamlit as st
@@ -9,8 +9,18 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import warnings
 
-from sklearn.linear_model import LinearRegression
+from sklearn.tree import DecisionTreeRegressor
 from sklearn.preprocessing import LabelEncoder
+
+# =========================================================
+# OPTIONAL PLOTLY SUPPORT
+# =========================================================
+
+try:
+    import plotly.express as px
+    PLOTLY_AVAILABLE = True
+except ImportError:
+    PLOTLY_AVAILABLE = False
 
 # =========================================================
 # PAGE CONFIG
@@ -52,8 +62,59 @@ h1 {
 # LOAD DATA
 # =========================================================
 
-try:
+@st.cache_data
+def load_data():
+
     df = pd.read_csv("cleaned_crop_production.csv")
+
+    # Clean column names
+    df.columns = df.columns.str.strip().str.lower()
+
+    # Clean text columns
+    for col in ["state", "district", "season", "crop"]:
+
+        df[col] = (
+            df[col]
+            .astype(str)
+            .str.strip()
+            .str.title()
+        )
+
+    # Convert numeric columns safely
+    df["production"] = pd.to_numeric(
+        df["production"],
+        errors="coerce"
+    )
+
+    df["area"] = pd.to_numeric(
+        df["area"],
+        errors="coerce"
+    )
+
+    df["year"] = pd.to_numeric(
+        df["year"],
+        errors="coerce"
+    )
+
+    # Drop only important nulls
+    df = df.dropna(
+        subset=[
+            "state",
+            "district",
+            "season",
+            "crop",
+            "production",
+            "area",
+            "year"
+        ]
+    )
+
+    return df
+
+
+try:
+
+    df = load_data()
 
 except Exception as e:
 
@@ -78,7 +139,7 @@ def train_model():
         "crop"
     ]
 
-    # Encode
+    # Encode categorical columns
     for col in categorical_cols:
 
         le = LabelEncoder()
@@ -104,8 +165,11 @@ def train_model():
     # Target
     y = data["production"]
 
-    # Lightweight Model
-    model = LinearRegression()
+    # Model
+    model = DecisionTreeRegressor(
+        max_depth=10,
+        random_state=42
+    )
 
     model.fit(X, y)
 
@@ -125,14 +189,14 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =========================================================
-# SIDEBAR
+# SIDEBAR FILTERS
 # =========================================================
 
 st.sidebar.header("📍 Dashboard Filters")
 
 state = st.sidebar.selectbox(
     "Select State",
-    sorted(df["state"].unique())
+    sorted(df["state"].dropna().unique())
 )
 
 state_df = df[
@@ -141,7 +205,7 @@ state_df = df[
 
 district = st.sidebar.selectbox(
     "Select District",
-    sorted(state_df["district"].unique())
+    sorted(state_df["district"].dropna().unique())
 )
 
 district_df = state_df[
@@ -150,7 +214,7 @@ district_df = state_df[
 
 season = st.sidebar.selectbox(
     "Select Season",
-    sorted(district_df["season"].unique())
+    sorted(district_df["season"].dropna().unique())
 )
 
 season_df = district_df[
@@ -158,7 +222,7 @@ season_df = district_df[
 ]
 
 crop_list = ["All Crops"] + sorted(
-    season_df["crop"].unique()
+    season_df["crop"].dropna().unique()
 )
 
 crop = st.sidebar.selectbox(
@@ -175,7 +239,7 @@ filtered_df = (
 )
 
 # =========================================================
-# YEAR FILTER
+# YEAR RANGE
 # =========================================================
 
 min_year = int(df["year"].min())
@@ -237,23 +301,40 @@ trend_df = (
     .reset_index()
 )
 
-fig1, ax1 = plt.subplots(figsize=(10,5))
+if PLOTLY_AVAILABLE:
 
-ax1.plot(
-    trend_df["year"],
-    trend_df["production"],
-    marker='o',
-    linewidth=3
-)
+    fig1 = px.line(
+        trend_df,
+        x="year",
+        y="production",
+        markers=True,
+        title="Production Trend"
+    )
 
-ax1.set_title("Production Trend Over Years")
+    st.plotly_chart(
+        fig1,
+        width="stretch"
+    )
 
-ax1.set_xlabel("Year")
-ax1.set_ylabel("Production")
+else:
 
-ax1.grid(True)
+    fig1, ax1 = plt.subplots(figsize=(10, 5))
 
-st.pyplot(fig1)
+    ax1.plot(
+        trend_df["year"],
+        trend_df["production"],
+        marker='o',
+        linewidth=3
+    )
+
+    ax1.set_title("Production Trend")
+
+    ax1.set_xlabel("Year")
+    ax1.set_ylabel("Production")
+
+    ax1.grid(True)
+
+    st.pyplot(fig1)
 
 # =========================================================
 # BAR CHART
@@ -268,74 +349,88 @@ crop_prod = (
     .head(10)
 )
 
-fig2, ax2 = plt.subplots(figsize=(10,5))
+if PLOTLY_AVAILABLE:
 
-bars = ax2.bar(
-    crop_prod.index,
-    crop_prod.values
-)
+    crop_df = crop_prod.reset_index()
 
-ax2.set_title("Top Crop Production")
-
-ax2.set_xlabel("Crop")
-ax2.set_ylabel("Production")
-
-plt.xticks(rotation=45)
-
-for bar in bars:
-
-    height = bar.get_height()
-
-    ax2.text(
-        bar.get_x() + bar.get_width()/2,
-        height,
-        f"{height:,.0f}",
-        ha='center',
-        va='bottom',
-        fontsize=8
+    fig2 = px.bar(
+        crop_df,
+        x="crop",
+        y="production",
+        color="production",
+        title="Top Crop Production"
     )
 
-st.pyplot(fig2)
+    st.plotly_chart(
+        fig2,
+        width="stretch"
+    )
+
+else:
+
+    fig2, ax2 = plt.subplots(figsize=(10, 5))
+
+    ax2.bar(
+        crop_prod.index,
+        crop_prod.values
+    )
+
+    ax2.set_title("Top Crop Production")
+
+    ax2.set_xlabel("Crop")
+    ax2.set_ylabel("Production")
+
+    plt.xticks(rotation=45)
+
+    st.pyplot(fig2)
 
 # =========================================================
-# PIE CHART
+# STATE COMPARISON
 # =========================================================
 
-st.subheader("🥧 Crop Distribution")
+st.subheader("🏛 State-wise Production")
 
-fig3, ax3 = plt.subplots(figsize=(7,7))
-
-top_crop_share = crop_prod.head(5)
-
-ax3.pie(
-    top_crop_share.values,
-    labels=top_crop_share.index,
-    autopct='%1.1f%%'
+state_prod = (
+    df.groupby("state")["production"]
+    .sum()
+    .sort_values(ascending=False)
+    .head(10)
 )
 
-ax3.set_title("Top Crop Share")
+if PLOTLY_AVAILABLE:
 
-st.pyplot(fig3)
+    state_df_plot = state_prod.reset_index()
 
-# =========================================================
-# SCATTER PLOT
-# =========================================================
+    fig3 = px.bar(
+        state_df_plot,
+        x="state",
+        y="production",
+        color="production",
+        title="Top Producing States"
+    )
 
-st.subheader("🌾 Area vs Production")
+    st.plotly_chart(
+        fig3,
+        width="stretch"
+    )
 
-fig4, ax4 = plt.subplots(figsize=(10,5))
+else:
 
-ax4.scatter(
-    filtered_df["area"],
-    filtered_df["production"]
-)
+    fig3, ax3 = plt.subplots(figsize=(12, 5))
 
-ax4.set_xlabel("Area")
-ax4.set_ylabel("Production")
+    ax3.bar(
+        state_prod.index,
+        state_prod.values
+    )
 
-ax4.set_title("Area vs Production")
+    ax3.set_title("Top Producing States")
 
-st.pyplot(fig4)
+    ax3.set_xlabel("State")
+    ax3.set_ylabel("Production")
+
+    plt.xticks(rotation=45)
+
+    st.pyplot(fig3)
 
 # =========================================================
 # PREDICTION SECTION
@@ -387,7 +482,7 @@ with pc2:
     )
 
 # =========================================================
-# PREDICTION BUTTON
+# PREDICT BUTTON
 # =========================================================
 
 if st.button("🚀 Predict Production"):
@@ -427,13 +522,9 @@ if st.button("🚀 Predict Production"):
 
         prediction = model.predict(input_df)[0]
 
-        predicted_yield = (
-            prediction / pred_area
-        )
+        predicted_yield = prediction / pred_area
 
-        st.success(
-            "Prediction Successful ✅"
-        )
+        st.success("Prediction Successful ✅")
 
         p1, p2 = st.columns(2)
 
@@ -448,7 +539,7 @@ if st.button("🚀 Predict Production"):
         )
 
         # =================================================
-        # FUTURE FORECAST
+        # FUTURE FORECAST GRAPH
         # =================================================
 
         st.subheader("📉 Future Forecast")
@@ -487,31 +578,41 @@ if st.button("🚀 Predict Production"):
 
         })
 
-        fig5, ax5 = plt.subplots(figsize=(10,5))
+        if PLOTLY_AVAILABLE:
 
-        ax5.plot(
-            future_df["Year"],
-            future_df["Production"],
-            marker='o',
-            linewidth=3
-        )
+            fig4 = px.line(
+                future_df,
+                x="Year",
+                y="Production",
+                markers=True,
+                title="Future Production Forecast"
+            )
 
-        ax5.set_title(
-            "Future Production Forecast"
-        )
+            st.plotly_chart(
+                fig4,
+                width="stretch"
+            )
 
-        ax5.set_xlabel("Year")
-        ax5.set_ylabel("Production")
+        else:
 
-        ax5.grid(True)
+            fig4, ax4 = plt.subplots(figsize=(10, 5))
 
-        st.pyplot(fig5)
+            ax4.plot(
+                future_df["Year"],
+                future_df["Production"],
+                marker='o',
+                linewidth=3
+            )
+
+            ax4.grid(True)
+
+            st.pyplot(fig4)
 
         # =================================================
-        # HISTORICAL vs PREDICTED
+        # HISTORICAL VS PREDICTION
         # =================================================
 
-        st.subheader("📈 Historical vs Predicted")
+        st.subheader("📈 Historical vs Prediction")
 
         historical_df = df[
             (df["state"] == pred_state) &
@@ -526,42 +627,60 @@ if st.button("🚀 Predict Production"):
             .reset_index()
         )
 
-        fig6, ax6 = plt.subplots(figsize=(10,5))
+        if PLOTLY_AVAILABLE:
 
-        ax6.plot(
-            yearly_prod["year"],
-            yearly_prod["production"],
-            marker='o',
-            linewidth=2,
-            label="Historical"
-        )
+            fig5 = px.line(
+                yearly_prod,
+                x="year",
+                y="production",
+                markers=True,
+                title="Historical Production"
+            )
 
-        ax6.scatter(
-            pred_year,
-            prediction,
-            s=250,
-            marker='*',
-            label="Prediction"
-        )
+            fig5.add_scatter(
+                x=[pred_year],
+                y=[prediction],
+                mode="markers",
+                marker=dict(size=15),
+                name="Prediction"
+            )
 
-        ax6.legend()
+            st.plotly_chart(
+                fig5,
+                width="stretch"
+            )
 
-        ax6.set_title(
-            "Historical vs Predicted Production"
-        )
+        else:
 
-        ax6.set_xlabel("Year")
-        ax6.set_ylabel("Production")
+            fig5, ax5 = plt.subplots(figsize=(10, 5))
 
-        ax6.grid(True)
+            ax5.plot(
+                yearly_prod["year"],
+                yearly_prod["production"],
+                marker='o',
+                linewidth=2,
+                label="Historical"
+            )
 
-        st.pyplot(fig6)
+            ax5.scatter(
+                pred_year,
+                prediction,
+                s=250,
+                marker='*',
+                label="Prediction"
+            )
+
+            ax5.legend()
+
+            ax5.grid(True)
+
+            st.pyplot(fig5)
 
         # =================================================
-        # SMART SUGGESTIONS
+        # SUGGESTIONS
         # =================================================
 
-        st.subheader("🌱 Farming Suggestions")
+        st.subheader("🌱 Smart Farming Suggestions")
 
         if predicted_yield > avg_yield:
 
@@ -570,8 +689,8 @@ if st.button("🚀 Predict Production"):
 
             Suggestions:
             - Maintain irrigation
-            - Continue balanced fertilizer
-            - Monitor pest attacks
+            - Use balanced fertilizer
+            - Continue pest monitoring
             """)
 
         else:
@@ -593,9 +712,9 @@ if st.button("🚀 Predict Production"):
 # DATA TABLE
 # =========================================================
 
-st.subheader("📋 Filtered Dataset")
+st.subheader("📋 Dataset Preview")
 
-st.dataframe(filtered_df)
+st.dataframe(filtered_df.head(100))
 
 # =========================================================
 # DOWNLOAD BUTTON
@@ -611,4 +730,3 @@ st.download_button(
     "filtered_dataset.csv",
     "text/csv"
 )
-
