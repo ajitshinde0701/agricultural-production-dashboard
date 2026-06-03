@@ -1,6 +1,4 @@
-__pycache__/
-.matplotlib/
-.env
 model.pkl
-
+*.pkl
+__pycache__/
 *.pyc
