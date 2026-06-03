@@ -1,6 +1,7 @@
 
 # =========================================================
-# PROFESSIONAL AGRICULTURE ANALYSIS DASHBOARD
+# AGRICULTURAL PRODUCTION ANALYSIS DASHBOARD
+# LIGHTWEIGHT + PROFESSIONAL VERSION
 # =========================================================
 
 import streamlit as st
@@ -8,7 +9,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import warnings
 
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import LabelEncoder
 
 # =========================================================
@@ -41,7 +42,7 @@ h1 {
     background-color: white;
     padding: 15px;
     border-radius: 10px;
-    box-shadow: 2px 2px 10px rgba(0,0,0,0.1);
+    box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
 }
 
 </style>
@@ -51,7 +52,13 @@ h1 {
 # LOAD DATA
 # =========================================================
 
-df = pd.read_csv("cleaned_crop_production.csv")
+try:
+    df = pd.read_csv("cleaned_crop_production.csv")
+
+except Exception as e:
+
+    st.error(f"Dataset Error: {e}")
+    st.stop()
 
 # =========================================================
 # MODEL TRAINING
@@ -71,6 +78,7 @@ def train_model():
         "crop"
     ]
 
+    # Encode
     for col in categorical_cols:
 
         le = LabelEncoder()
@@ -81,6 +89,7 @@ def train_model():
 
         label_encoders[col] = le
 
+    # Features
     X = data[
         [
             "state",
@@ -92,13 +101,11 @@ def train_model():
         ]
     ]
 
+    # Target
     y = data["production"]
 
-    model = RandomForestRegressor(
-        n_estimators=200,
-        random_state=42,
-        n_jobs=-1
-    )
+    # Lightweight Model
+    model = LinearRegression()
 
     model.fit(X, y)
 
@@ -118,7 +125,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =========================================================
-# SIDEBAR FILTERS
+# SIDEBAR
 # =========================================================
 
 st.sidebar.header("📍 Dashboard Filters")
@@ -128,7 +135,9 @@ state = st.sidebar.selectbox(
     sorted(df["state"].unique())
 )
 
-state_df = df[df["state"] == state]
+state_df = df[
+    df["state"] == state
+]
 
 district = st.sidebar.selectbox(
     "Select District",
@@ -191,6 +200,7 @@ filtered_df = filtered_df[
 st.subheader("📊 Dashboard Overview")
 
 total_production = filtered_df["production"].sum()
+
 total_area = filtered_df["area"].sum()
 
 avg_yield = (
@@ -219,7 +229,7 @@ c3.metric(
 # LINE GRAPH
 # =========================================================
 
-st.subheader("📈 Production Trend Over Years")
+st.subheader("📈 Production Trend")
 
 trend_df = (
     filtered_df.groupby("year")["production"]
@@ -236,7 +246,8 @@ ax1.plot(
     linewidth=3
 )
 
-ax1.set_title("Production Trend")
+ax1.set_title("Production Trend Over Years")
+
 ax1.set_xlabel("Year")
 ax1.set_ylabel("Production")
 
@@ -248,7 +259,7 @@ st.pyplot(fig1)
 # BAR CHART
 # =========================================================
 
-st.subheader("🏛 Top Producing Crops")
+st.subheader("🌾 Top Crop Production")
 
 crop_prod = (
     filtered_df.groupby("crop")["production"]
@@ -265,6 +276,7 @@ bars = ax2.bar(
 )
 
 ax2.set_title("Top Crop Production")
+
 ax2.set_xlabel("Crop")
 ax2.set_ylabel("Production")
 
@@ -289,9 +301,9 @@ st.pyplot(fig2)
 # PIE CHART
 # =========================================================
 
-st.subheader("🥧 Crop Share Distribution")
+st.subheader("🥧 Crop Distribution")
 
-fig3, ax3 = plt.subplots(figsize=(8,8))
+fig3, ax3 = plt.subplots(figsize=(7,7))
 
 top_crop_share = crop_prod.head(5)
 
@@ -380,168 +392,208 @@ with pc2:
 
 if st.button("🚀 Predict Production"):
 
-    state_encoded = (
-        label_encoders["state"]
-        .transform([pred_state])[0]
-    )
+    try:
 
-    district_encoded = (
-        label_encoders["district"]
-        .transform([pred_district])[0]
-    )
+        state_encoded = (
+            label_encoders["state"]
+            .transform([pred_state])[0]
+        )
 
-    season_encoded = (
-        label_encoders["season"]
-        .transform([pred_season])[0]
-    )
+        district_encoded = (
+            label_encoders["district"]
+            .transform([pred_district])[0]
+        )
 
-    crop_encoded = (
-        label_encoders["crop"]
-        .transform([pred_crop])[0]
-    )
+        season_encoded = (
+            label_encoders["season"]
+            .transform([pred_season])[0]
+        )
 
-    input_df = pd.DataFrame({
+        crop_encoded = (
+            label_encoders["crop"]
+            .transform([pred_crop])[0]
+        )
 
-        "state": [state_encoded],
-        "district": [district_encoded],
-        "season": [season_encoded],
-        "crop": [crop_encoded],
-        "area": [pred_area],
-        "year": [pred_year]
-
-    })
-
-    prediction = model.predict(input_df)[0]
-
-    predicted_yield = prediction / pred_area
-
-    st.success("Prediction Successful ✅")
-
-    p1, p2 = st.columns(2)
-
-    p1.metric(
-        "🌾 Predicted Production",
-        f"{prediction:,.2f}"
-    )
-
-    p2.metric(
-        "📈 Predicted Yield",
-        f"{predicted_yield:.2f}"
-    )
-
-    # =====================================================
-    # FUTURE FORECAST LINE GRAPH
-    # =====================================================
-
-    st.subheader("📉 Future Forecast")
-
-    future_years = list(
-        range(pred_year, pred_year + 6)
-    )
-
-    future_predictions = []
-
-    for yr in future_years:
-
-        future_input = pd.DataFrame({
+        input_df = pd.DataFrame({
 
             "state": [state_encoded],
             "district": [district_encoded],
             "season": [season_encoded],
             "crop": [crop_encoded],
             "area": [pred_area],
-            "year": [yr]
+            "year": [pred_year]
 
         })
 
-        future_pred = model.predict(
-            future_input
-        )[0]
+        prediction = model.predict(input_df)[0]
 
-        future_predictions.append(
-            future_pred
+        predicted_yield = (
+            prediction / pred_area
         )
 
-    future_df = pd.DataFrame({
+        st.success(
+            "Prediction Successful ✅"
+        )
 
-        "Year": future_years,
-        "Production": future_predictions
+        p1, p2 = st.columns(2)
 
-    })
+        p1.metric(
+            "🌾 Predicted Production",
+            f"{prediction:,.2f}"
+        )
 
-    fig5, ax5 = plt.subplots(figsize=(10,5))
+        p2.metric(
+            "📈 Predicted Yield",
+            f"{predicted_yield:.2f}"
+        )
 
-    ax5.plot(
-        future_df["Year"],
-        future_df["Production"],
-        marker='o',
-        linewidth=3
-    )
+        # =================================================
+        # FUTURE FORECAST
+        # =================================================
 
-    ax5.set_title("Future Production Forecast")
+        st.subheader("📉 Future Forecast")
 
-    ax5.set_xlabel("Year")
-    ax5.set_ylabel("Predicted Production")
+        future_years = list(
+            range(pred_year, pred_year + 6)
+        )
 
-    ax5.grid(True)
+        future_predictions = []
 
-    st.pyplot(fig5)
+        for yr in future_years:
 
-    # =====================================================
-    # HISTORICAL vs PREDICTED
-    # =====================================================
+            future_input = pd.DataFrame({
 
-    st.subheader("📈 Historical vs Predicted")
+                "state": [state_encoded],
+                "district": [district_encoded],
+                "season": [season_encoded],
+                "crop": [crop_encoded],
+                "area": [pred_area],
+                "year": [yr]
 
-    historical_df = df[
-        (df["state"] == pred_state) &
-        (df["district"] == pred_district) &
-        (df["crop"] == pred_crop)
-    ]
+            })
 
-    yearly_prod = (
-        historical_df.groupby("year")
-        ["production"]
-        .mean()
-        .reset_index()
-    )
+            future_pred = model.predict(
+                future_input
+            )[0]
 
-    fig6, ax6 = plt.subplots(figsize=(10,5))
+            future_predictions.append(
+                future_pred
+            )
 
-    ax6.plot(
-        yearly_prod["year"],
-        yearly_prod["production"],
-        marker='o',
-        linewidth=2,
-        label="Historical"
-    )
+        future_df = pd.DataFrame({
 
-    ax6.scatter(
-        pred_year,
-        prediction,
-        s=250,
-        marker='*',
-        label="Prediction"
-    )
+            "Year": future_years,
+            "Production": future_predictions
 
-    ax6.legend()
+        })
 
-    ax6.set_title(
-        "Historical vs Predicted Production"
-    )
+        fig5, ax5 = plt.subplots(figsize=(10,5))
 
-    ax6.set_xlabel("Year")
-    ax6.set_ylabel("Production")
+        ax5.plot(
+            future_df["Year"],
+            future_df["Production"],
+            marker='o',
+            linewidth=3
+        )
 
-    ax6.grid(True)
+        ax5.set_title(
+            "Future Production Forecast"
+        )
 
-    st.pyplot(fig6)
+        ax5.set_xlabel("Year")
+        ax5.set_ylabel("Production")
+
+        ax5.grid(True)
+
+        st.pyplot(fig5)
+
+        # =================================================
+        # HISTORICAL vs PREDICTED
+        # =================================================
+
+        st.subheader("📈 Historical vs Predicted")
+
+        historical_df = df[
+            (df["state"] == pred_state) &
+            (df["district"] == pred_district) &
+            (df["crop"] == pred_crop)
+        ]
+
+        yearly_prod = (
+            historical_df.groupby("year")
+            ["production"]
+            .mean()
+            .reset_index()
+        )
+
+        fig6, ax6 = plt.subplots(figsize=(10,5))
+
+        ax6.plot(
+            yearly_prod["year"],
+            yearly_prod["production"],
+            marker='o',
+            linewidth=2,
+            label="Historical"
+        )
+
+        ax6.scatter(
+            pred_year,
+            prediction,
+            s=250,
+            marker='*',
+            label="Prediction"
+        )
+
+        ax6.legend()
+
+        ax6.set_title(
+            "Historical vs Predicted Production"
+        )
+
+        ax6.set_xlabel("Year")
+        ax6.set_ylabel("Production")
+
+        ax6.grid(True)
+
+        st.pyplot(fig6)
+
+        # =================================================
+        # SMART SUGGESTIONS
+        # =================================================
+
+        st.subheader("🌱 Farming Suggestions")
+
+        if predicted_yield > avg_yield:
+
+            st.success("""
+            ✅ Excellent yield expected.
+
+            Suggestions:
+            - Maintain irrigation
+            - Continue balanced fertilizer
+            - Monitor pest attacks
+            """)
+
+        else:
+
+            st.warning("""
+            ⚠ Lower yield expected.
+
+            Suggestions:
+            - Improve irrigation
+            - Use organic compost
+            - Apply fertilizers properly
+            """)
+
+    except Exception as e:
+
+        st.error(f"Prediction Error: {e}")
 
 # =========================================================
-# DATASET TABLE
+# DATA TABLE
 # =========================================================
 
-st.subheader("📋 Dataset")
+st.subheader("📋 Filtered Dataset")
 
 st.dataframe(filtered_df)
 
